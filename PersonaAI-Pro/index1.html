@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Persona AI</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0f0f1a;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* CARD */
+.card {
+  width: 600px;
+  padding: 30px;
+  background: #1c1c2e;
+  border-radius: 20px;
+  text-align: center;
+  transition: all 0.4s ease;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from {opacity: 0; transform: translateY(20px);}
+  to {opacity: 1; transform: translateY(0);}
+}
+
+/* OPTION BUTTONS */
+.option {
+  display: block;
+  margin: 10px;
+  padding: 12px;
+  background: #6d28d9;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.option:hover {
+  transform: scale(1.05);
+}
+
+/* RESULT */
+.result {
+  font-size: 26px;
+  margin-bottom: 10px;
+}
+
+.explain {
+  margin-top: 15px;
+  padding: 15px;
+  background: #2a2a40;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #cfcfcf;
+  line-height: 1.5;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card" id="card">
+  <h2 id="question">Loading...</h2>
+  <div id="options"></div>
+</div>
+
+<canvas id="chart" style="display:none;"></canvas>
+
+<script>
+
+/* =======================
+   10 QUESTIONS DATASET
+======================= */
+
+const questionBank = [
+  {
+    q: "When you face a sudden problem, you usually:",
+    options: [
+      { text: "Take charge immediately", trait: "leader" },
+      { text: "Break it into logical steps", trait: "analytical" },
+      { text: "Feel stressed but manage somehow", trait: "emotional" },
+      { text: "Think of a creative workaround", trait: "creative" }
+    ]
+  },
+  {
+    q: "In a group project, your role is:",
+    options: [
+      { text: "Leader who assigns tasks", trait: "leader" },
+      { text: "Planner and organizer", trait: "analytical" },
+      { text: "Support everyone emotionally", trait: "emotional" },
+      { text: "Idea generator", trait: "creative" }
+    ]
+  },
+  {
+    q: "Your decision making style is:",
+    options: [
+      { text: "Fast and bold", trait: "leader" },
+      { text: "Data and reasoning based", trait: "analytical" },
+      { text: "Emotion guided", trait: "emotional" },
+      { text: "Intuitive and imaginative", trait: "creative" }
+    ]
+  },
+  {
+    q: "How do you handle criticism?",
+    options: [
+      { text: "Ignore and move forward", trait: "leader" },
+      { text: "Analyze and improve", trait: "analytical" },
+      { text: "Feel hurt but reflect", trait: "emotional" },
+      { text: "Turn it into inspiration", trait: "creative" }
+    ]
+  },
+  {
+    q: "When working under pressure:",
+    options: [
+      { text: "Take control of situation", trait: "leader" },
+      { text: "Plan step-by-step", trait: "analytical" },
+      { text: "Stay emotional but continue", trait: "emotional" },
+      { text: "Find unique solutions", trait: "creative" }
+    ]
+  },
+  {
+    q: "Your thinking style is:",
+    options: [
+      { text: "Action oriented", trait: "leader" },
+      { text: "Logical structured thinking", trait: "analytical" },
+      { text: "Emotion-based thinking", trait: "emotional" },
+      { text: "Abstract imagination", trait: "creative" }
+    ]
+  },
+  {
+    q: "When learning something new:",
+    options: [
+      { text: "Jump into practice", trait: "leader" },
+      { text: "Understand theory first", trait: "analytical" },
+      { text: "Need emotional motivation", trait: "emotional" },
+      { text: "Explore creatively", trait: "creative" }
+    ]
+  },
+  {
+    q: "In conflict situations you:",
+    options: [
+      { text: "Take control and resolve", trait: "leader" },
+      { text: "Analyze both sides", trait: "analytical" },
+      { text: "Avoid confrontation emotionally", trait: "emotional" },
+      { text: "Think of unique resolution", trait: "creative" }
+    ]
+  },
+  {
+    q: "Your biggest strength is:",
+    options: [
+      { text: "Leadership", trait: "leader" },
+      { text: "Logical thinking", trait: "analytical" },
+      { text: "Empathy", trait: "emotional" },
+      { text: "Creativity", trait: "creative" }
+    ]
+  },
+  {
+    q: "How do you recharge after stress?",
+    options: [
+      { text: "Start new tasks immediately", trait: "leader" },
+      { text: "Plan calmly", trait: "analytical" },
+      { text: "Talk to someone close", trait: "emotional" },
+      { text: "Do something artistic", trait: "creative" }
+    ]
+  }
+];
+
+/* =======================
+   GLOBAL STATE
+======================= */
+
+let index = 0;
+let answers = [];
+
+/* =======================
+   LOAD QUESTION
+======================= */
+
+function loadQuestion() {
+  const current = questionBank[index];
+
+  document.getElementById("question").innerText = current.q;
+
+  let optDiv = document.getElementById("options");
+  optDiv.innerHTML = "";
+
+  current.options.forEach(opt => {
+    let btn = document.createElement("div");
+    btn.className = "option";
+    btn.innerText = opt.text;
+
+    btn.onclick = () => {
+      answers.push(opt.trait);
+      nextQuestion();
+    };
+
+    optDiv.appendChild(btn);
+  });
+}
+
+/* =======================
+   NEXT QUESTION
+======================= */
+
+function nextQuestion() {
+  index++;
+
+  if (index >= questionBank.length) {
+    submit();
+    return;
+  }
+
+  loadQuestion();
+}
+
+/* =======================
+   SUBMIT + API CALL
+======================= */
+
+async function submit() {
+
+  document.getElementById("card").style.display = "none";
+  document.getElementById("chart").style.display = "block";
+
+  let res = await fetch("http://127.0.0.1:8000/predict", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({features: answers})
+  });
+
+  let data = await res.json();
+
+  let labels = Object.keys(data.breakdown);
+  let values = Object.values(data.breakdown);
+
+  new Chart(document.getElementById("chart"), {
+    type: "pie",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: ["#8b5cf6","#22c55e","#f59e0b","#ef4444","#3b82f6"]
+      }]
+    }
+  });
+
+  let explanation = generateExplanation(data.personality);
+
+  let div = document.createElement("div");
+  div.className = "card";
+  div.innerHTML = `
+    <div class="result">You are a ${data.personality}</div>
+    <div class="explain">${explanation}</div>
+    <div style="margin-top:10px;color:#22c55e;">
+      Thank you for your valuable feedback 💖
+    </div>
+  `;
+
+  document.body.appendChild(div);
+}
+
+/* =======================
+   AI EXPLANATION ENGINE
+======================= */
+
+function generateExplanation(personality) {
+
+  if (personality === "leader") {
+    return "You naturally take charge in situations and prefer action over hesitation. People rely on your decision-making ability.";
+  }
+
+  if (personality === "analytical") {
+    return "You are logic-driven and prefer structured thinking. You analyze before acting and avoid impulsive decisions.";
+  }
+
+  if (personality === "creative") {
+    return "Your imagination is your strength. You see possibilities where others see limits.";
+  }
+
+  if (personality === "emotional") {
+    return "You are deeply empathetic and emotionally aware, making you strong in understanding people.";
+  }
+
+  return "You have a balanced personality with multiple strong traits.";
+}
+
+/* INIT */
+loadQuestion();
+
+</script>
+
+</body>
+</html>
