@@ -1,62 +1,71 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-import pickle
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 import numpy as np
-import matplotlib.pyplot as plt
+import pickle
+import sqlite3
 
-# Load model and tools
-model = pickle.load(open("model.pkl", "rb"))
-encoder = pickle.load(open("label_encoder.pkl", "rb"))
-scaler = pickle.load(open("scaler.pkl", "rb"))
+app = FastAPI()
 
-app = FastAPI(title="Persona AI")
+model = pickle.load(open("persona_model.pkl","rb"))
 
-# Input format (MCQ vector)
-class InputData(BaseModel):
-    features: list  # MCQ encoded values
+# DB
+conn = sqlite3.connect("feedback.db", check_same_thread=False)
+cur = conn.cursor()
+cur.execute("CREATE TABLE IF NOT EXISTS feedback (msg TEXT)")
+conn.commit()
+
+details = {
+    "Leader": {
+        "title":"👑 Leader",
+        "desc":"Bold, confident & decision maker",
+        "advice":"Practice empathy & patience"
+    },
+    "Creative": {
+        "title":"🎨 Creative",
+        "desc":"Innovative & imaginative",
+        "advice":"Turn ideas into execution"
+    },
+    "Analytical": {
+        "title":"🧠 Analytical",
+        "desc":"Logical & detail-oriented",
+        "advice":"Avoid overthinking"
+    },
+    "Social": {
+        "title":"🌟 Social",
+        "desc":"Outgoing & energetic",
+        "advice":"Take time for yourself"
+    },
+    "Calm": {
+        "title":"🌿 Calm",
+        "desc":"Peaceful & balanced",
+        "advice":"Step out of comfort zone"
+    }
+}
 
 @app.get("/")
 def home():
-    return {"message": "Persona AI is running 🚀"}
+    return {"message":"PersonaAI Premium 🚀"}
 
-@app.post("/predict")
-def predict_personality(data: InputData):
+@app.get("/ui")
+def ui():
+    return FileResponse("index.html")
+
+@app.get("/predict")
+def predict(**kwargs):
     try:
-        input_array = np.array(data.features).reshape(1, -1)
-        scaled_input = scaler.transform(input_array)
+        values = [int(kwargs[f"q{i}"]) for i in range(1,16)]
 
-        # Get probabilities (IMPORTANT CHANGE)
-        probabilities = model.predict_proba(scaled_input)[0]
+        if any(v<1 or v>5 for v in values):
+            raise HTTPException(400,"Values must be 1-5")
 
-        classes = encoder.classes_
-
-        result = dict(zip(classes, probabilities))
-        create_pie_chart(result)
-
-        # Final personality
-        top_personality = classes[np.argmax(probabilities)]
-
-        return {
-            "status": "success",
-            "personality": top_personality,
-            "breakdown": result
-        }
+        result = model.predict([values])[0]
+        return details[result]
 
     except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-        
-    
+        raise HTTPException(500,str(e))
 
-def create_pie_chart(data):
-    labels = list(data.keys())
-    values = list(data.values())
-
-    plt.figure(figsize=(6,6))
-    plt.pie(values, labels=labels, autopct='%1.1f%%')
-    plt.title("Persona AI - Personality Trait Composition")
-
-    plt.savefig("personality_pie.png")
-    plt.close()
+@app.get("/feedback")
+def feedback(msg:str):
+    cur.execute("INSERT INTO feedback VALUES (?)",(msg,))
+    conn.commit()
+    return {"message":"Thank you for your feedback!! ~ From Nitya...😊"}

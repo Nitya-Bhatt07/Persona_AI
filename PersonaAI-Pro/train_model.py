@@ -1,46 +1,36 @@
 import pandas as pd
-import pickle
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+import random
 from sklearn.ensemble import RandomForestClassifier
+import pickle
 
-# Load dataset
-df = pd.read_csv("dataset.csv")
+personalities = ["Leader","Creative","Analytical","Social","Calm"]
+rows = []
 
-# Assume dataset has:
-# features columns + "personality" column as target
+for p in personalities:
+    for _ in range(50):  # 250 rows
+        q = []
+        for i in range(15):
+            if (p=="Leader" and i<3) or \
+               (p=="Creative" and 3<=i<6) or \
+               (p=="Analytical" and 6<=i<9) or \
+               (p=="Social" and 9<=i<12) or \
+               (p=="Calm" and 12<=i<15):
+                q.append(random.randint(4,5))
+            else:
+                q.append(random.randint(1,3))
+
+        rows.append(q + [p])
+
+cols = [f"q{i}" for i in range(1,16)] + ["personality"]
+df = pd.DataFrame(rows, columns=cols)
+df.to_csv("dataset.csv", index=False)
 
 X = df.drop("personality", axis=1)
 y = df["personality"]
 
-# Encode labels
-le = LabelEncoder()
-y_encoded = le.fit_transform(y)
+model = RandomForestClassifier(n_estimators=300)
+model.fit(X,y)
 
-# Scale features
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+pickle.dump(model, open("persona_model.pkl","wb"))
 
-# Train test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X_scaled, y_encoded, test_size=0.2, random_state=42
-)
-
-# Model
-model = RandomForestClassifier(n_estimators=200, random_state=42)
-model.fit(X_train, y_train)
-
-# Save model
-with open("model.pkl", "wb") as f:
-    pickle.dump(model, f)
-
-# Save encoder
-with open("label_encoder.pkl", "wb") as f:
-    pickle.dump(le, f)
-
-# Save scaler
-with open("scaler.pkl", "wb") as f:
-    pickle.dump(scaler, f)
-
-print("✅ Model training completed and files saved successfully!")
-
+print("Premium model ready ✅")
